@@ -24,7 +24,7 @@ import time
 from datetime import datetime, timezone
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CONFIG = os.path.join(REPO, "examples", "libraries.yaml")
+CONFIG = os.path.join(REPO, "examples", "config", "libraries.yaml")
 BIN = os.path.join(REPO, "build", "doc-library")
 OUT = os.path.join(REPO, "build", "validation")
 PREVIEW = os.path.join(OUT, "预览")
@@ -137,7 +137,7 @@ def static_checks():
         found = any(os.access(os.path.join(d, tool), os.X_OK)
                     for d in os.environ.get("PATH", "").split(os.pathsep))
         record(f"tool_{tool}", "PASS" if found else "FAIL", "PATH 中可用" if found else "未找到")
-    req = os.path.join(REPO, "examples", "requests.jsonl")
+    req = os.path.join(REPO, "examples", "requests", "search.jsonl")
     n_ok = 0
     if os.path.isfile(req):
         for i, line in enumerate(open(req, encoding="utf-8"), 1):
@@ -152,7 +152,7 @@ def static_checks():
         record("jsonl_examples", "PASS" if n_ok >= 4 else "FAIL", f"{n_ok} 条合法请求")
     else:
         record("jsonl_examples", "FAIL", f"缺少 {req}")
-    for p in ("types.go", "library.go", "engine.go", "cmd/doc-library/main.go"):
+    for p in ("pkg/doclibrary/types.go", "pkg/doclibrary/library.go", "pkg/doclibrary/engine.go", "cmd/doc-library/main.go"):
         record(f"src_{p}", "PASS" if os.path.isfile(os.path.join(REPO, p)) else "FAIL", p)
 
 
@@ -313,7 +313,7 @@ def runtime_checks(pdf_page=1):
     note("frequent", e)
 
     # 10. JSONL：示例 4 条 + 1 条非法 + 2 条有效，错误行后继续，退出 1
-    lines = open(os.path.join(REPO, "examples", "requests.jsonl"), encoding="utf-8").read().rstrip("\n")
+    lines = open(os.path.join(REPO, "examples", "requests", "search.jsonl"), encoding="utf-8").read().rstrip("\n")
     payload = lines + '\n{ invalid json !!\n' \
         + '{"mode":"search","query":"LRSheetCompose","source":"yantrace","kinds":["source"],"limit":1}\n' \
         + '{"mode":"frequent","passive":true,"limit":1}\n'

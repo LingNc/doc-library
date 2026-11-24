@@ -1,10 +1,10 @@
 # 调用契约
 
-本文按当前冻结的公开类型记录，具体调用与验收结果在实现完成后补齐。生产Go包名 `doclibrary`，module `doc-library`；`New(Config)` 创建实例，`Execute(context.Context, Request)` 执行一次请求。CLI与Go包使用同一检索实现。
+本文记录当前公开类型与调用约定，实际验收见 [validation.md](validation.md)。生产Go包名 `doclibrary`，导入路径 `doc-library/pkg/doclibrary`，module `doc-library`；`New(Config)` 创建实例，`Execute(context.Context, Request)` 执行一次请求。CLI与Go包使用同一检索实现。
 
 ## 文档来源与配置
 
-配置 `sources` 是 `{id,root,include,exclude,extensions,weight}` 数组。每个id在配置中唯一，以字母或数字开头，只含字母、数字、下划线、连字符和点；命中的 `source` 与根内相对 `doc` 共同标识文件，不同资料中的同名文件不会合并成一个身份。使用[三资料配置](../examples/libraries.yaml)可接入本工作区YanTrace、exam-zh和LuaDraw。工具本身没有这些库的固定路径或专有命令。
+配置 `sources` 是 `{id,root,include,exclude,extensions,weight}` 数组。每个id在配置中唯一，以字母或数字开头，只含字母、数字、下划线、连字符和点；命中的 `source` 与根内相对 `doc` 共同标识文件，不同资料中的同名文件不会合并成一个身份。使用[三资料配置](../examples/config/libraries.yaml)可接入本工作区YanTrace、exam-zh和LuaDraw。工具本身没有这些库的固定路径或专有命令。
 
 CLI中的配置根路径和缓存相对配置文件所在目录解析；直接Go调用的相对路径按调用进程工作目录解析。配置只读授权目录，不复制原始文档。`include/exclude` 使用根内斜杠路径和glob，`**/` 可匹配零层或多层；`extensions` 进一步限制文件类型。直接read、grep和路径导航同样受配置限制，不能靠猜文件名绕过排除规则。路径不允许绝对文件名、`..`或符号链接逃逸。
 
@@ -47,13 +47,13 @@ CLI中的配置根路径和缓存相对配置文件所在目录解析；直接Go
 go build -o build/doc-library ./cmd/doc-library
 
 # 多资料统一查询，或按请求过滤只查源码。
-build/doc-library --config examples/libraries.yaml --mode search --query LRSheetCompose --source yantrace --kind source
+build/doc-library --config examples/config/libraries.yaml --mode search --query LRSheetCompose --source yantrace --kind source
 
 # 无需配置文件，明确传一个文档根。
 build/doc-library --root manuals=/absolute/path/to/manuals --mode find --query '*.pdf'
 
 # 机器调用：一行一个请求，共用配置和缓存。
-build/doc-library --config examples/libraries.yaml --jsonl < examples/requests.jsonl
+build/doc-library --config examples/config/libraries.yaml --jsonl < examples/requests/search.jsonl
 
 # 在没有文档根和PDF工具时发现接口。
 build/doc-library --mode schema
@@ -67,7 +67,7 @@ build/doc-library --mode schema
 
 也支持包装形式 `{"request_id":"task-1","arguments":{...}}`，响应保留request_id以配对请求。请求JSON字段覆盖已传CLI默认参数，未提供的字段沿用CLI参数；显式false和0不能被当成缺字段丢弃。未知字段或同一次输入中紧跟第二个JSON值会拒绝。请求中只放检索参数；资料授权、缓存目录和源配置由CLI/config指定，不由检索请求自由切换到其他宿主目录。
 
-CLI常规选项包括 `--query/--source/--doc`、`--kind/--ext`、`--match/--regex/--case-sensitive`、`--limit/--offset`、`--snippet-chars/--max-chars`、`--start-line/--end-line`、`--page/--region/--dpi/--out` 及频次/图片相关选项，以实际 `--help` 和 `schema` 为准。配置支持严格JSON或YAML；相对路径以配置所在目录解析。`--cache-dir` 可显式覆盖缓存位置，`DOC_LIBRARY_CACHE` 提供环境默认值。在用户缓存目录只读的沙箱中，应配置工作区内明确可写的缓存目录；不需要修改HOME或给文档目录写权限。Go调用方同样可通过 `Config.CacheDir` 指定，示例Go客户端要求显式传入该路径。
+CLI常规选项包括 `--query/--source/--doc`、`--kind/--ext`、`--match/--regex/--case-sensitive`、`--limit/--offset`、`--snippet-chars/--max-chars`、`--start-line/--end-line`、`--page/--region/--dpi/--out` 及频次/图片相关选项，以实际 `--help` 和 `schema` 为准。配置示例统一使用 YAML；加载器兼容严格 JSON 配置。JSON/JSONL 查询请求与 YAML 配置各自独立；相对路径以配置所在目录解析。`--cache-dir` 可显式覆盖缓存位置，`DOC_LIBRARY_CACHE` 提供环境默认值。在用户缓存目录只读的沙箱中，应配置工作区内明确可写的缓存目录；不需要修改HOME或给文档目录写权限。Go调用方同样可通过 `Config.CacheDir` 指定，示例Go客户端要求显式传入该路径。
 
 ## JSON结果
 

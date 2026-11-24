@@ -10,7 +10,7 @@
 
 ## 状态速览
 
-项目已按AGENTS_TEMPLATE创建并初始化独立Git仓库。通用核心、CLI及公开API回归已完成：全仓go test、go vet、go test -race通过，Linux构建和Windows amd64交叉编译通过（Windows未实际运行）。真实三资料整轮验收静态12项、运行27项共39项通过；230文件重复index全部命中，实际PDF区域已查看。尚未发布或推送。
+项目已按AGENTS_TEMPLATE创建并初始化独立Git仓库。通用核心、CLI及公开API回归已完成：全仓go test、go vet、go test -race通过，Linux构建和Windows amd64交叉编译通过（Windows未实际运行）。真实三资料整轮验收静态12项、运行27项共39项通过；231文件重复index全部命中，实际PDF区域已查看。尚未发布或推送。
 
 ### 任务目标
 
@@ -26,12 +26,15 @@
 - text-only操作不因含有PDF而预先要求Poppler；PDF文本读取需pdftotext，只有显式图片查看才需pdftoppm。扫描PDF无OCR不声称读到文字；PDF物理页+bbox不等于TeX源精确映射。
 - 路径必须在配置root内且满足allowlist/include/exclude；拒绝绝对文档路径、..、符号链接逃逸，缓存和view输出不得覆盖源文件。
 - 缓存按根/配置和内容隔离，可重建，本地忽略；不提交用户文档、提取全文缓存、程序二进制或预览。复用源码保留MIT许可与来源记录。
+- 目录整理约定：核心源码与测试集中在pkg/doclibrary/（导入doc-library/pkg/doclibrary），CLI保留cmd/doc-library/；配置示例统一为examples/config/*.yaml，请求样例放examples/requests/，Go示例在examples/go-client/。JSON/JSONL用于机器请求与响应；加载器保留旧JSON配置兼容，不再混放JSON配置示例。移动配置务必同步相对roots/cache_dir与文档、脚本引用。
 - Go构建缓存与临时验收放build/，预览在build/预览/；不下载OCR/embedding模型，不运行外部文档代码。若用Python验收，仅Conda base。
 - 仅本地新增Git提交，不amend、不配置远端、不推送或发版。完成前实际测试、查看PDF裁图并更新README/本文件；不以编译成功替代缓存/边界/定位验收。
 
 ### 当前进度
 
-- 已从compare-figure既有文档模块抽取段落、合并、去重、位置、裁图及频次能力并泛化；保留来源许可，未复制绘图runner或固定资源，原仓库未改。根包New(Config)/Execute(ctx,Request)与CLI共用同一实现。
+- 目录整理已完成：12个核心Go源码/测试移至pkg/doclibrary/，CLI/测试/Go示例导入同步；配置集中examples/config/且全部为YAML，最小JSON配置已由minimal.yaml替代；JSONL样例单列examples/requests/search.jsonl。配置相对路径、验收脚本与文档已同步。整理后全仓race/test、vet、Linux构建和Windows交叉构建通过，最小YAML配置与Go示例实跑成功；三资料39项复验全通过，231文件重复index全命中，第13物理页区域图703×1053已实际查看。本次目录整理按用户要求纳入本地Git提交，不推送或发布。
+
+- 已从compare-figure既有文档模块抽取段落、合并、去重、位置、裁图及频次能力并泛化；保留来源许可，未复制绘图runner或固定资源，原仓库未改。核心包New(Config)/Execute(ctx,Request)与CLI共用同一实现。
 - 七模式及index/status/schema均落地；严格JSON/YAML配置和裸JSON/envelope/JSONL，未知字段和越界路径拒绝，错误行不阻断后续请求。公开schema从类型生成。默认search any/5条/1200片段字符/6000正文字符，read400行；可配置配额和过滤。
 - 缓存按规范化roots/配置命名空间、逐文件SHA校验；同size/mtime内容改写仍失效，未改PDF继续复用。系统锁随持有进程退出释放，不偷活锁。旧内容寻址文件无自动GC；频次在API层校验隐藏过期条目，不声称物理擦除。passive只用于frequent，不改变主动search/read/view/grep计数。
 - 核心及CLI源码提交c044f0f，初始仓库ec38ab9；最终Go test/vet/race、Linuxbuild/Windowscrosscompile通过。实际三源230文件、全部暖缓存命中、39项脚本检查均通过。物理13页区域图703×1053实际查看；全部本机证据在build/validation，docs/validation记录边界。Go客户端示例显式要求资料与可写缓存目录。
@@ -39,7 +42,7 @@
 
 ### 文件清单
 
-- 根Go包：可配置检索、源定位、缓存与频次；cmd/doc-library：CLI。
+- `pkg/doclibrary` 核心包：可配置检索、源定位、缓存与频次；cmd/doc-library：CLI。
 - docs/：协议、配置、复用来源与验证；examples/：可搬移示例配置和请求。
 - build/：仅本地构建、缓存和验收，不作为正式文件清单。
 

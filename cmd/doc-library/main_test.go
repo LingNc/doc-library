@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	doclibrary "doc-library"
+	doclibrary "doc-library/pkg/doclibrary"
 )
 
 func TestCLIChild(t *testing.T) {

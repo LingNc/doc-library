@@ -1,6 +1,10 @@
 # 开发与验证
 
-核心是一个Go模块：根包 `doclibrary`，命令入口 `cmd/doc-library`；程序调用示例在 `examples/go-client`。生产代码不依赖Python、模型SDK或绘图runner。PDF文字与渲染调用Poppler宿主程序。
+核心是一个Go模块：`pkg/doclibrary` 包（包名 `doclibrary`，导入路径 `doc-library/pkg/doclibrary`），命令入口 `cmd/doc-library`；程序调用示例在 `examples/go-client`。生产代码不依赖Python、模型SDK或绘图runner。PDF文字与渲染调用Poppler宿主程序。
+
+配置示例统一放在 `examples/config/*.yaml`；查询请求样例放在 `examples/requests/`，JSON/JSONL 请求与资料授权配置各自独立。加载器保留 JSON 配置兼容。移动配置文件时，必须同步调整其中相对 roots/cache_dir，以及 README、调用契约和验收脚本引用。
+
+根目录只放入口说明、Go 模块声明和许可证；核心源码及测试集中在 `pkg/doclibrary/`，CLI 测试随 CLI 保留。长期说明放 `docs/`，验收脚本放 `scripts/`，可重建构建、缓存、报告和预览放 `build/`，第三方许可证放 `licenses/`。当前模块仅本地使用，尚未发布远程模块路径。
 
 ```bash
 GOCACHE="$PWD/build/go-cache" go test ./...

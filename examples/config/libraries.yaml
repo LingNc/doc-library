@@ -1,6 +1,6 @@
 # 相对路径以本配置所在目录为基准；资料只读，不复制进doc-library。
-# 从仓库根运行：build/doc-library --config examples/libraries.yaml --mode search --query LRSheetCompose
-cache_dir: ../build/doc-cache
+# 从仓库根运行：build/doc-library --config examples/config/libraries.yaml --mode search --query LRSheetCompose
+cache_dir: ../../build/doc-cache
 cache_mode: readwrite
 search:
   match: all
@@ -13,7 +13,7 @@ frequency:
   text_chars: 2048
 sources:
   - id: yantrace
-    root: ../../yantrace
+    root: ../../../yantrace
     include:
       - doc/yantrace.pdf
       - doc/src/**/*.tex
@@ -27,7 +27,7 @@ sources:
     extensions: [.md, .tex, .sty, .cls, .pdf]
     weight: 1
   - id: examzh
-    root: ../../yantrace/vendor/exam-zh-0.3.6/exam-zh
+    root: ../../../yantrace/vendor/exam-zh-0.3.6/exam-zh
     include:
       - README.md
       - doc/exam-zh-doc.pdf
@@ -36,7 +36,7 @@ sources:
     extensions: [.md, .tex, .pdf]
     weight: 1
   - id: luadraw
-    root: ../../compare-figure/vendor/luadraw-3.7/luadraw
+    root: ../../../compare-figure/vendor/luadraw-3.7/luadraw
     include:
       - README.md
       - doc/*.pdf

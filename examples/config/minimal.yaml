@@ -1,0 +1,11 @@
+# 最小自检配置：只检索本仓库说明，不依赖外部资料或PDF工具。
+# 相对路径以本配置所在目录为基准。
+sources:
+  - id: docs
+    root: ../../docs
+    extensions: [.md]
+cache_dir: ../../build/self-doc-cache
+search:
+  match: all
+  limit: 3
+  max_chars: 4000

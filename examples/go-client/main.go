@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	doclibrary "doc-library"
+	doclibrary "doc-library/pkg/doclibrary"
 )
 
 // Pass a real documentation directory as the first argument.

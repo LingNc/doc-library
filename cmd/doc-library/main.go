@@ -17,7 +17,7 @@ import (
 	"syscall"
 	"time"
 
-	doclibrary "doc-library"
+	doclibrary "doc-library/pkg/doclibrary"
 	"gopkg.in/yaml.v3"
 )
 
