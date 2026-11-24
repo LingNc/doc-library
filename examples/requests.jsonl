@@ -1,0 +1,4 @@
+{"mode":"search","query":"LRSheetCompose","source":"yantrace","limit":3,"max_chars":4000}
+{"mode":"grep","source":"luadraw","doc":"files","query":"Dpolyline3d","limit":3,"recursive":true}
+{"mode":"read","source":"examzh","doc":"examples/basic/00-minimal.tex","start_line":1,"end_line":30}
+{"mode":"frequent","limit":5,"passive":true}
