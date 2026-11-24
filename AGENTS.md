@@ -10,7 +10,7 @@
 
 ## 状态速览
 
-项目已按AGENTS_TEMPLATE创建并初始化独立Git仓库，关键核心正在抽取和泛化；尚未完成或发布。
+项目已按AGENTS_TEMPLATE创建并初始化独立Git仓库。通用核心、CLI及公开API回归已完成：全仓go test、go vet、go test -race通过，Linux构建和Windows amd64交叉编译通过（Windows未实际运行）。真实三资料整轮验收静态12项、运行27项共39项通过；230文件重复index全部命中，实际PDF区域已查看。尚未发布或推送。
 
 ### 任务目标
 
@@ -31,8 +31,11 @@
 
 ### 当前进度
 
-- 已盘点既有七模式CLI、源码/PDF段落检索和频次缓存，记录其硬编码库根、中文混合查询、两栏PDF以及缓存锁改造点。
-- 核心owner：b9d68dc0-267c-4174-8437-80bd61588390；主线负责仓库/文档/真实集成，CLI随后独立分派。
+- 已从compare-figure既有文档模块抽取段落、合并、去重、位置、裁图及频次能力并泛化；保留来源许可，未复制绘图runner或固定资源，原仓库未改。根包New(Config)/Execute(ctx,Request)与CLI共用同一实现。
+- 七模式及index/status/schema均落地；严格JSON/YAML配置和裸JSON/envelope/JSONL，未知字段和越界路径拒绝，错误行不阻断后续请求。公开schema从类型生成。默认search any/5条/1200片段字符/6000正文字符，read400行；可配置配额和过滤。
+- 缓存按规范化roots/配置命名空间、逐文件SHA校验；同size/mtime内容改写仍失效，未改PDF继续复用。系统锁随持有进程退出释放，不偷活锁。旧内容寻址文件无自动GC；频次在API层校验隐藏过期条目，不声称物理擦除。passive只用于frequent，不改变主动search/read/view/grep计数。
+- 核心及CLI源码提交c044f0f，初始仓库ec38ab9；最终Go test/vet/race、Linuxbuild/Windowscrosscompile通过。实际三源230文件、全部暖缓存命中、39项脚本检查均通过。物理13页区域图703×1053实际查看；全部本机证据在build/validation，docs/validation记录边界。Go客户端示例显式要求资料与可写缓存目录。
+- 固定流程文档盘点、公开API测试、CLI及真实验收由Luna完成，GLM初稿验收脚本复用后由Luna和主线校准；关键核心由Sol抽取实现。当前无未完成的验收或后台任务，不将缓存/全文/二进制提交Git。
 
 ### 文件清单
 
