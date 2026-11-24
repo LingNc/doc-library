@@ -32,6 +32,8 @@
 
 ### 当前进度
 
+- 用户要求先研究缓存性能与files/SQLite双后端，特别关注FUSE/9p/NFS一类挂载；本阶段只研究不实现迁移。目录整理已提交4889726。docs/cache-design.md记录代码耗时路径、官方SQLite WAL/网络文件系统限制、保留双后端及本地缓存建议、严格SHA与快速重验策略的区别。现有CLI本地ext4暖态测量231文件/约12.59MiB，每case预热1次+测5次：status中位82—91ms、index197—223ms、search295—350ms；暖index/search均231hit/0miss。不把该测量称为SQLite或网络挂载性能结论；没有安装SQLite依赖或改变生产源码。原始测量和抓取资料仅在build/cache-research/，长期研究文档单独本地提交，不推送。
+
 - 目录整理已完成：12个核心Go源码/测试移至pkg/doclibrary/，CLI/测试/Go示例导入同步；配置集中examples/config/且全部为YAML，最小JSON配置已由minimal.yaml替代；JSONL样例单列examples/requests/search.jsonl。配置相对路径、验收脚本与文档已同步。整理后全仓race/test、vet、Linux构建和Windows交叉构建通过，最小YAML配置与Go示例实跑成功；三资料39项复验全通过，231文件重复index全命中，第13物理页区域图703×1053已实际查看。本次目录整理按用户要求纳入本地Git提交，不推送或发布。
 
 - 已从compare-figure既有文档模块抽取段落、合并、去重、位置、裁图及频次能力并泛化；保留来源许可，未复制绘图runner或固定资源，原仓库未改。核心包New(Config)/Execute(ctx,Request)与CLI共用同一实现。
