@@ -100,7 +100,7 @@ func sortFrequency(es []frequencyEntry) {
 		return es[i].Result.EntryID < es[j].Result.EntryID
 	})
 }
-func (l *Library) frequent(ctx context.Context, r Request, sources []Source) ([]Result, []frequencyEntry, []string, error) {
+func (l *Library) frequent(ctx context.Context, r Request, sources []Source, paging *pageState) ([]Result, []frequencyEntry, []string, error) {
 	if !l.frequencyEnabled() {
 		return nil, nil, []string{"frequency is disabled (cache_mode=off or frequency.enabled=false)"}, nil
 	}
@@ -153,7 +153,7 @@ func (l *Library) frequent(ctx context.Context, r Request, sources []Source) ([]
 		return nil, nil, warnings, fmt.Errorf("entry_id must identify exactly one current entry; matched %d", len(valid))
 	}
 	sortFrequency(valid)
-	start := r.Offset
+	start := 0
 	end := len(valid)
 	if r.StartLine > 0 || r.EndLine > 0 {
 		if r.Doc == "" {
@@ -175,27 +175,19 @@ func (l *Library) frequent(ctx context.Context, r Request, sources []Source) ([]
 	if start >= end {
 		return nil, nil, warnings, nil
 	}
-	end = minInt(end, start+r.Limit)
-	chosen := valid[start:end]
-	var results []Result
-	var emitted []frequencyEntry
-	used := 0
-	for _, entry := range chosen {
+	p := pageCollector{r: r, state: paging}
+	for _, entry := range valid[start:end] {
 		result := entry.Result
 		chars := r.LineChars
 		if chars == 0 {
 			chars = 256
 		}
-		text := truncate(strings.Join(strings.Fields(result.Text), " "), chars)
-		remaining := r.MaxChars - used
-		if remaining <= 0 {
+		original := strings.Join(strings.Fields(result.Text), " ")
+		result.Text = truncate(original, chars)
+		result.Truncated = len([]rune(result.Text)) < len([]rune(original))
+		if !p.add(candidate{result: result, records: []frequencyEntry{entry}}) {
 			break
 		}
-		result.Text = truncate(text, remaining)
-		result.Truncated = len([]rune(result.Text)) < len([]rune(strings.Join(strings.Fields(entry.Result.Text), " ")))
-		used += len([]rune(result.Text))
-		results = append(results, result)
-		emitted = append(emitted, entry)
 	}
-	return results, emitted, warnings, nil
+	return p.results, p.records, warnings, nil
 }

@@ -26,6 +26,8 @@ CLI中的配置根路径和缓存相对配置文件所在目录解析；直接Go
 | `frequency.max_entries` / `text_chars` | 256条/每条2048字符 |
 | `pdf.timeout_seconds` | 每个PDF提取/渲染的超时120秒 |
 | `pdf.pdftotext` / `pdftoppm` | 可指定宿主程序位置；按需使用 |
+| `output.version` | 1（兼容默认）；可选v2紧凑wire响应 |
+| `output.include_bbox` | v1默认true、v2默认false；可选bool覆盖 |
 
 ## 模式与定位
 
@@ -36,7 +38,7 @@ CLI中的配置根路径和缓存相对配置文件所在目录解析；直接Go
 - `frequent`：查看已主动读取的高频片段，可通过稳定 `entry_id` 精读；`passive=true` 用于被动摘要而不增加频次。
 - `index`、`status`、`schema`：索引与接口发现；schema不要求先配置资料或PDF工具。
 
-每个命中结果含 `source/doc/kind/text`，文本源另含 `start_line/end_line`，PDF另含 `page/bbox/bbox_pct/page_width/page_height`。`bbox` 为PDF点坐标、左上原点xyxy；`bbox_pct` 和view的 `region{left,top,right,bottom}` 为页面百分比。页码是PDF物理页，不是印刷页脚号码。PDF定位不代表SyncTeX源行映射。
+每个命中结果含 `source/doc/kind/text`，文本源另含 `start_line/end_line`，PDF另含物理 `page`。v1保留PDF `bbox/bbox_pct/page_width/page_height`；v2默认不返回区域坐标，`include_bbox:true` 时仅返回 `bbox_pct`。`bbox` 为PDF点坐标、左上原点xyxy；`bbox_pct` 和view的 `region{left,top,right,bottom}` 为页面百分比。页码是PDF物理页，不是印刷页脚号码。PDF定位不代表SyncTeX源行映射。
 
 请求以 `source` 选择单一来源，或 `sources` 选择多个来源，两者互斥；不填则在配置范围内查询。`kinds:["source"]` 或 `["pdf"]` 与 `extensions:[".md",".tex"]` 在提取前过滤，可让源码检索不触发无关PDF初始化；它们进一步缩小配置授权范围。用 `limit/offset` 分页，用 `snippet_chars/max_chars` 控制文字预算。响应 `truncated` 与 `warnings` 明确提示预算截断，`next_offset` 提供后续位置；有后续位置不代表已计算准确的全库总命中数。预算截断、缺字或无法提取的内容不得被描述为完整原文。
 
@@ -67,11 +69,17 @@ build/doc-library --mode schema
 
 也支持包装形式 `{"request_id":"task-1","arguments":{...}}`，响应保留request_id以配对请求。请求JSON字段覆盖已传CLI默认参数，未提供的字段沿用CLI参数；显式false和0不能被当成缺字段丢弃。未知字段或同一次输入中紧跟第二个JSON值会拒绝。请求中只放检索参数；资料授权、缓存目录和源配置由CLI/config指定，不由检索请求自由切换到其他宿主目录。
 
-CLI常规选项包括 `--query/--source/--doc`、`--kind/--ext`、`--match/--regex/--case-sensitive`、`--limit/--offset`、`--snippet-chars/--max-chars`、`--start-line/--end-line`、`--page/--region/--dpi/--out` 及频次/图片相关选项，以实际 `--help` 和 `schema` 为准。配置示例统一使用 YAML；加载器兼容严格 JSON 配置。JSON/JSONL 查询请求与 YAML 配置各自独立；相对路径以配置所在目录解析。`--cache-dir` 可显式覆盖缓存位置，`DOC_LIBRARY_CACHE` 提供环境默认值。在用户缓存目录只读的沙箱中，应配置工作区内明确可写的缓存目录；不需要修改HOME或给文档目录写权限。Go调用方同样可通过 `Config.CacheDir` 指定，示例Go客户端要求显式传入该路径。
+本地Go API/CLI已实现并通过回归：独立库及CLI默认v1，调用方可配置/请求v2；核心全包test/vet/race和CLI test/vet通过，真实PDF响应及区域渲染实验记录见[输出设计](output-design.md)。compare-host计划单独默认v2，不改变库/CLI默认；宿主仍在其仓库联调，固定远程依赖尚未发布。以下请求优先级和wire细节已在本地实现验证，宿主固定依赖的接线尚不在本地验收结论内。
+
+CLI常规选项包括 `--query/--source/--doc`、`--kind/--ext`、`--match/--regex/--case-sensitive`、`--limit/--offset`、`--snippet-chars/--max-chars`、`--start-line/--end-line`、`--page/--region/--dpi/--out` 及频次/图片相关选项。`--max-chars` 限制结果正文字符数，不限制整个JSON大小。输出格式用 `--output-version=1|2` 选择；程序自身版本仍由 `--version` 显示。`--include-bbox=true|false` 仅用于显式覆盖坐标输出；裸 `--include-bbox` 等同true。该开关不启用PDF提取或图片渲染。默认输出版本仍为v1以保持既有调用兼容；新紧凑调用须显式请求v2。
+
+输出优先级为：JSON请求中的非默认字段 > CLI flag覆盖后的 `config.output` > 协议默认。CLI flag在建库前写入启动配置；JSON省略、`include_bbox:null` 和 `output_version:0` 继承该启动默认，显式false或合法非零版本覆盖它。其他无效非零版本由核心校验拒绝；CLI显式 `--output-version=0` 会被拒绝，因为0表示请求继承。配置新增 `output.version` 和可选 `output.include_bbox`。JSON/JSONL查询请求与YAML配置各自独立；相对路径以配置所在目录解析。`--cache-dir` 可显式覆盖缓存位置，`DOC_LIBRARY_CACHE` 提供环境默认值。在用户缓存目录只读的沙箱中，应配置工作区内明确可写的缓存目录；不需要修改HOME或给文档目录写权限。Go调用方同样可通过 `Config.CacheDir` 指定，示例Go客户端要求显式传入该路径。
 
 ## JSON结果
 
-正常响应：`version="doc-library/1"`、`ok`、`mode`、`results`、`images`、`cache`，可带便于直接阅读的 `text`、`warnings` 和接口 `schema`。程序应使用结构化 `results`，不要反向解析格式化text。
+正常响应的schema用 `oneOf` 区分v1与v2。v1（独立库/CLI默认）为 `version="doc-library/1"`，保留 `results`、顶层可读 `text` 镜像、缓存诊断及丰富PDF区域字段。v2为 `version="doc-library/2"`，`results[].text` 是唯一命中正文来源，不重复输出顶层 `text`；常规响应省略cache诊断（`status/index`保留cache），默认不带bbox，显式 `include_bbox:true` 时仅输出PDF `bbox_pct`。已知常规binary-skip提示在v2过滤；其他重要warnings、截断和分页字段保留。
+
+Go `Response.Text` 与 `Response.Cache` 字段继续可供宿主直接使用；`MarshalJSON` 对v2 wire投影只序列化一份Results正文。PDF的页内source block索引保留在Go结果中，但不进入v2 wire。纯展示设置不改变提取cache key或资料namespace。
 
 错误由CLI输出 `ok:false` 与 `error{code,message}`；调用方必须同时查看退出码和 `ok`。单次失败退出2；JSONL单行失败应输出该行错误并继续处理，流结束有错误则退出1。stdout不混入进度日志。
 

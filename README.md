@@ -4,7 +4,7 @@
 
 核心为独立 Go 库，CLI 调用同一实现。复用并泛化 compare-figure 的段落读取、PDF 定位和高频片段能力，不要求绘图会话、模型密钥或上传文档。原始文档内容只读，索引和使用频次存入配置的缓存目录。
 
-提供 `search/read/view/list/find/grep/frequent`，另有 `index/status/schema`。支持多来源、类型过滤、正则、匹配方式、结果数量和正文预算；结果带定位、缓存与截断信息，显式查看时才生成图像。
+提供 `search/read/view/list/find/grep/frequent`，另有 `index/status/schema`。支持多来源、类型过滤、正则、匹配方式、结果数量和正文预算；响应带定位与截断信息，显式查看时才生成图像。独立Go库/CLI支持v1兼容默认和显式v2紧凑wire响应，bbox按需输出；本地API、CLI和真实PDF实验已验证。compare-host计划单独默认v2，仍在其仓库联调，固定远程依赖尚未发布。
 
 ## 快速开始
 
@@ -57,7 +57,7 @@ Go 包导入路径为 `doc-library/pkg/doclibrary`，包名 `doclibrary`。当�
 - [开发说明](docs/development.md)：构建、回归和目录维护。
 - [验证记录](docs/validation.md)：真实 YanTrace、exam-zh、LuaDraw 文档及缓存验证。
 - [缓存性能研究](docs/cache-design.md)：文件与 SQLite 双后端、FUSE/NFS 约束及后续优化建议（设计草案，尚未实现）。
-- [检索输出设计](docs/output-design.md)：默认简洁正文、保留页/行出处及可选bbox的设计提案（尚未实现，当前参数仍见调用契约）。
+- [检索输出设计](docs/output-design.md)：本地v1/v2协议、bbox控制、分页/缓存边界及真实PDF实验记录；compare-host联调状态单独说明。
 - [复用来源](docs/provenance.md)：抽取基线、许可证和独立边界。
 
 普通文本操作无需 PDF 工具；PDF 文本依赖 Poppler 的 `pdftotext`，显式看图另需 `pdftoppm`。不做 OCR，不执行文档中的 TeX/Lua 代码；PDF 页码/区域定位不代表精确反查源代码行。内容寻址缓存目前没有自动垃圾回收，旧提取数据可能继续占用磁盘。

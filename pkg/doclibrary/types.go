@@ -6,6 +6,7 @@ package doclibrary
 import "context"
 
 const Version = "doc-library/1"
+const CompactVersion = "doc-library/2"
 
 type Config struct {
 	Sources   []Source          `json:"sources" yaml:"sources"`
@@ -15,6 +16,15 @@ type Config struct {
 	Limits    Limits            `json:"limits,omitempty" yaml:"limits,omitempty"`
 	Frequency FrequencySettings `json:"frequency,omitempty" yaml:"frequency,omitempty"`
 	PDF       PDFSettings       `json:"pdf,omitempty" yaml:"pdf,omitempty"`
+	Output    OutputSettings    `json:"output,omitempty" yaml:"output,omitempty"`
+}
+
+// OutputSettings changes presentation only, never extraction or cache identity.
+// Version 0 inherits the legacy protocol (1). A nil IncludeBBox uses the
+// effective protocol default: true for v1, false for v2.
+type OutputSettings struct {
+	Version     int   `json:"version,omitempty" yaml:"version,omitempty"`
+	IncludeBBox *bool `json:"include_bbox,omitempty" yaml:"include_bbox,omitempty"`
 }
 type Source struct {
 	ID         string   `json:"id" yaml:"id"`
@@ -56,6 +66,8 @@ type Region struct {
 	Bottom float64 `json:"bottom" yaml:"bottom"`
 }
 type Request struct {
+	OutputVersion int      `json:"output_version,omitempty" yaml:"output_version,omitempty"`
+	IncludeBBox   *bool    `json:"include_bbox,omitempty" yaml:"include_bbox,omitempty"`
 	Mode          string   `json:"mode,omitempty" yaml:"mode,omitempty"`
 	Source        string   `json:"source,omitempty" yaml:"source,omitempty"`
 	Sources       []string `json:"sources,omitempty" yaml:"sources,omitempty"`

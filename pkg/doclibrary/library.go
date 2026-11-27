@@ -35,6 +35,16 @@ type sourceFile struct {
 // Relative paths are resolved against the process working directory. CLI adapters
 // should first resolve config-file paths against that file's directory.
 func New(c Config) (*Library, error) {
+	if c.Output.Version == 0 {
+		c.Output.Version = 1
+	}
+	if c.Output.Version != 1 && c.Output.Version != 2 {
+		return nil, fmt.Errorf("output.version must be 1 or 2")
+	}
+	if c.Output.IncludeBBox != nil {
+		include := *c.Output.IncludeBBox
+		c.Output.IncludeBBox = &include
+	}
 	if c.CacheMode == "" {
 		c.CacheMode = "readwrite"
 	}
@@ -149,9 +159,22 @@ func New(c Config) (*Library, error) {
 	// can overwrite another's file or frequency entries in a shared cache root.
 	b, _ := json.Marshal(struct {
 		Schema string
-		Config Config
-	}{extractionSchema, c})
+		Config semanticConfig
+	}{extractionSchema, semanticConfig{c.Sources, c.CacheDir, c.CacheMode, c.Search, c.Limits, c.Frequency, c.PDF}})
 	return &Library{config: c, namespace: hashBytes(b)}, nil
+}
+
+// semanticConfig deliberately preserves the pre-output Config field order and
+// tags. Even a zero OutputSettings struct would marshal as {}, changing existing
+// namespaces. Presentation settings must never split extraction or frequency.
+type semanticConfig struct {
+	Sources   []Source          `json:"sources"`
+	CacheDir  string            `json:"cache_dir,omitempty"`
+	CacheMode string            `json:"cache_mode,omitempty"`
+	Search    SearchSettings    `json:"search,omitempty"`
+	Limits    Limits            `json:"limits,omitempty"`
+	Frequency FrequencySettings `json:"frequency,omitempty"`
+	PDF       PDFSettings       `json:"pdf,omitempty"`
 }
 
 func hashBytes(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }

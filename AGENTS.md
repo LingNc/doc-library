@@ -32,7 +32,8 @@
 
 ### 当前进度
 
-- 用户要求重新构思检索返回的冗余与bbox可选性，已新增docs/output-design.md设计提案及README入口；尚未实现参数/协议/核心变更。事实核对：CLI响应Results+Text正文镜像重复；compare-figure模型链只传Text，真正噪声是适配层cachehash/双bbox/页尺寸。bbox与bbox_pct同矩形不同坐标；PDF提取/合并依赖-bbox-layout，隐藏输出不等于免定位提取。建议默认保留source/doc/物理page或源码行，bbox_pct单一坐标opt-in；output.include_bbox启动默认+单次IncludeBBox可选bool覆盖，显式false必须有效；region裁图/include_image渲染各自独立。纯输出设置不可改变cache namespace/频次身份。机器v1默认契约不能静默反转，紧凑新契约才去Text镜像/cache常规信息；模型文字可先瘦身。分页还需独立修正预算早停漏next_offset与snippet截断混用。本轮只有文档核对，无测试/性能或接口已实现声明，不推送或发版。
+- 检索输出重构已实现并本地验收：Config.Output(version/include_bbox)及Request.output_version/IncludeBBox可选bool；库/CLI省略仍v1兼容，显式v2为doc-library/2，results唯一机器正文、常规省略Text/cache、bbox默认false且开启仅pct，status/index保留cache诊断；Go Response仍保留Text/Cache/PDF块索引供宿主。请求true/false>CLI启动default>配置>协议默认，null/0继承启动default，CLI显式version0拒绝。位置投影在render/频次之后，include_image不受关闭bbox影响；频次无可用框不重提取。只过滤已知常规二进制跳过，不隐去提取/OCR/缓存损坏等重要warning。缓存语义序列化显式旧字段顺序/tags并完全排除Output，旧namespace、extractionSchema与key保持，暖缓存/频次跨输出设置共用。统一pageCollector观察实际候选才给next_offset，修复预算早停漏续页和末页恰好limit误报，snippet截断独立且lookahead不计频。
+- 验收：核心test/vet/race、CLI test/vet、全仓test/vet、Linux构建及Windows amd64交叉构建通过（未Windows实跑）。新增81覆盖组合、旧JSON逐字快照、旧namespace精确字节、各mode预算/末页/空结果、真实Poppler PDF裁图回归通过。实际官方LuaDraw PDF三个相同命中v1 2091bytes/v2 878bytes（此例减少58%，不宣称普遍比率）；bboxfalse/true自动图444×92一致，pct显式裁图348×24已看对应cutfacet2目录文字，null/false/zero继承均通过，cache namespace一致。证据build/output-validation。设计文档已更新为实现契约；compare-figure宿主正在独立联调，正式远程pin尚未更新，不以临时modfile验收声称正式发布。当前不推送或发版。
 
 - 用户要求先研究缓存性能与files/SQLite双后端，特别关注FUSE/9p/NFS一类挂载；本阶段只研究不实现迁移。目录整理已提交4889726。docs/cache-design.md记录代码耗时路径、官方SQLite WAL/网络文件系统限制、保留双后端及本地缓存建议、严格SHA与快速重验策略的区别。现有CLI本地ext4暖态测量231文件/约12.59MiB，每case预热1次+测5次：status中位82—91ms、index197—223ms、search295—350ms；暖index/search均231hit/0miss。不把该测量称为SQLite或网络挂载性能结论；没有安装SQLite依赖或改变生产源码。原始测量和抓取资料仅在build/cache-research/，长期研究文档单独本地提交，不推送。
 

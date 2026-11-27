@@ -120,6 +120,19 @@ func (m textMatcher) score(text string) int {
 	return score
 }
 func (l *Library) normalizeRequest(r Request) (Request, error) {
+	if r.OutputVersion == 0 {
+		r.OutputVersion = l.config.Output.Version
+	}
+	if r.OutputVersion != 1 && r.OutputVersion != 2 {
+		return r, fmt.Errorf("output_version must be 1 or 2")
+	}
+	if r.IncludeBBox == nil {
+		r.IncludeBBox = l.config.Output.IncludeBBox
+	}
+	if r.IncludeBBox == nil {
+		include := r.OutputVersion == 1
+		r.IncludeBBox = &include
+	}
 	if r.Mode == "" {
 		r.Mode = "search"
 	}
@@ -200,6 +213,9 @@ func (l *Library) Execute(ctx context.Context, r Request) (Response, error) {
 	var e error
 	r, e = l.normalizeRequest(r)
 	resp.Mode = r.Mode
+	if r.OutputVersion == 2 {
+		resp.Version = CompactVersion
+	}
 	if e != nil {
 		return resp, e
 	}
@@ -219,14 +235,15 @@ func (l *Library) Execute(ctx context.Context, r Request) (Response, error) {
 		return resp, fmt.Errorf("at least one configured source is required")
 	}
 	var records []frequencyEntry
+	var paging pageState
 	switch r.Mode {
 	case "frequent":
-		resp.Results, records, resp.Warnings, e = l.frequent(ctx, r, sources)
+		resp.Results, records, resp.Warnings, e = l.frequent(ctx, r, sources, &paging)
 		if r.Passive {
 			records = nil
 		}
 	case "read", "view":
-		resp.Results, resp.Images, records, resp.Warnings, e = l.readOrView(ctx, r, sources, &resp.Cache)
+		resp.Results, resp.Images, records, resp.Warnings, e = l.readOrView(ctx, r, sources, &resp.Cache, &paging)
 	default:
 		var files []sourceFile
 		files, e = l.scan(ctx, sources, r.Doc)
@@ -243,9 +260,9 @@ func (l *Library) Execute(ctx context.Context, r Request) (Response, error) {
 		switch r.Mode {
 		case "list", "find", "status":
 			resp.Cache.Files = len(files)
-			resp.Results, e = l.navigate(r, files)
+			resp.Results, e = l.navigate(r, files, &paging)
 		case "grep":
-			resp.Results, records, resp.Warnings, e = l.grep(ctx, r, files, &resp.Cache)
+			resp.Results, records, resp.Warnings, e = l.grep(ctx, r, files, &resp.Cache, &paging)
 		case "search", "index":
 			var docs []document
 			docs, resp.Warnings, e = l.loadAll(ctx, files, &resp.Cache)
@@ -253,12 +270,12 @@ func (l *Library) Execute(ctx context.Context, r Request) (Response, error) {
 				return resp, e
 			}
 			if r.Mode == "search" {
-				resp.Results, records, e = l.searchDocuments(r, docs)
+				resp.Results, records, e = l.searchDocuments(r, docs, &paging)
 			} else {
 				for _, d := range docs {
 					resp.Results = append(resp.Results, Result{Source: d.file.source.ID, Doc: d.file.doc, Kind: d.entry.Kind, Text: d.digest})
 				}
-				resp.Results = budgetResults(pageResults(resp.Results, r), r.MaxChars)
+				resp.Results = paginateResults(resp.Results, r, &paging)
 			}
 			if e == nil && r.Mode == "search" && r.IncludeImage {
 				for _, result := range resp.Results {
@@ -301,9 +318,7 @@ func (l *Library) Execute(ctx context.Context, r Request) (Response, error) {
 	if resp.Images == nil {
 		resp.Images = []Image{}
 	}
-	used := 0
 	for _, result := range resp.Results {
-		used += len([]rune(result.Text))
 		if result.Truncated {
 			resp.Truncated = true
 		}
@@ -311,16 +326,20 @@ func (l *Library) Execute(ctx context.Context, r Request) (Response, error) {
 	if resp.Truncated {
 		resp.Warnings = append(resp.Warnings, "result snippet truncated; increase snippet_chars, line_chars, or max_chars to read more")
 	}
-	if used >= r.MaxChars {
+	if paging.budgetStopped {
 		resp.Truncated = true
 		resp.Warnings = append(resp.Warnings, "result text budget reached; increase max_chars or narrow the request")
 	}
-	if len(resp.Results) >= r.Limit && (r.Mode == "search" || r.Mode == "grep" || r.Mode == "list" || r.Mode == "find" || r.Mode == "index" || r.Mode == "status" || r.Mode == "frequent") {
-		next := r.Offset + len(resp.Results)
-		resp.NextOffset = &next
-		resp.Warnings = append(resp.Warnings, fmt.Sprintf("result limit reached; more results may exist at offset=%d", next))
+	resp.NextOffset = paging.next
+	if paging.next != nil {
+		resp.Warnings = append(resp.Warnings, fmt.Sprintf("more results available at offset=%d", *paging.next))
 	}
+	projectResults(resp.Results, r.OutputVersion, *r.IncludeBBox)
 	resp.Text = formatResults(resp.Results)
+	if r.OutputVersion == 2 {
+		resp.Warnings = compactWarnings(resp.Warnings)
+		resp.Text = formatCompactResults(resp.Results)
+	}
 	resp.OK = true
 	return resp, nil
 }
@@ -357,11 +376,63 @@ func requestAllows(r Request, doc string) bool {
 	}
 	return true
 }
-func pageResults(results []Result, r Request) []Result {
-	if r.Offset >= len(results) {
-		return []Result{}
+
+// pageState keeps result-set continuation separate from snippet truncation.
+type pageState struct {
+	next          *int
+	budgetStopped bool
+}
+
+type pageCollector struct {
+	r       Request
+	state   *pageState
+	seen    int
+	used    int
+	results []Result
+	records []frequencyEntry
+}
+
+func (p *pageCollector) add(c candidate) bool {
+	index := p.seen
+	p.seen++
+	if index < p.r.Offset {
+		return true
 	}
-	return results[r.Offset:minInt(len(results), r.Offset+r.Limit)]
+	if len(p.results) >= p.r.Limit || p.used >= p.r.MaxChars {
+		next := p.r.Offset + len(p.results)
+		p.state.next = &next
+		p.state.budgetStopped = p.used >= p.r.MaxChars
+		return false
+	}
+	remaining := p.r.MaxChars - p.used
+	if len([]rune(c.result.Text)) > remaining {
+		c.result.Text = truncate(c.result.Text, remaining)
+		c.result.Truncated = true
+	}
+	p.used += len([]rune(c.result.Text))
+	p.results = append(p.results, c.result)
+	p.records = append(p.records, c.records...)
+	return true
+}
+
+func paginateCandidates(candidates []candidate, r Request, state *pageState) ([]Result, []frequencyEntry) {
+	p := pageCollector{r: r, state: state}
+	for _, c := range candidates {
+		if !p.add(c) {
+			break
+		}
+	}
+	return p.results, p.records
+}
+
+func paginateResults(results []Result, r Request, state *pageState) []Result {
+	p := pageCollector{r: r, state: state}
+	for _, result := range results {
+		if !p.add(candidate{result: result}) {
+			break
+		}
+	}
+	return p.results
 }
 func formatResults(results []Result) string {
 	var rows []string
@@ -397,7 +468,7 @@ type candidate struct {
 	records []frequencyEntry
 }
 
-func (l *Library) searchDocuments(r Request, docs []document) ([]Result, []frequencyEntry, error) {
+func (l *Library) searchDocuments(r Request, docs []document, paging *pageState) ([]Result, []frequencyEntry, error) {
 	matcher, e := newMatcher(r)
 	if e != nil {
 		return nil, nil, e
@@ -453,28 +524,17 @@ func (l *Library) searchDocuments(r Request, docs []document) ([]Result, []frequ
 		}
 		return a.StartLine < b.StartLine
 	})
-	if r.Offset >= len(candidates) {
-		return nil, nil, nil
+	for i := range candidates {
+		result := &candidates[i].result
+		original := result.Text
+		result.Text = truncate(searchSnippet(original, r.SnippetChars), r.SnippetChars)
+		result.Truncated = len([]rune(result.Text)) < len([]rune(strings.TrimSpace(strings.Join(strings.Fields(original), " "))))
 	}
-	end := minInt(len(candidates), r.Offset+r.Limit)
-	var results []Result
-	var records []frequencyEntry
-	used := 0
-	for _, c := range candidates[r.Offset:end] {
-		remaining := r.MaxChars - used
-		if remaining <= 0 {
-			break
-		}
-		original := c.result.Text
-		c.result.Text = truncate(searchSnippet(original, r.SnippetChars), minInt(remaining, r.SnippetChars))
-		c.result.Truncated = len([]rune(c.result.Text)) < len([]rune(strings.TrimSpace(strings.Join(strings.Fields(original), " "))))
-		used += len([]rune(c.result.Text))
-		results = append(results, c.result)
-		records = append(records, c.records...)
-	}
+	results, records := paginateCandidates(candidates, r, paging)
 	return results, records, nil
 }
-func (l *Library) navigate(r Request, files []sourceFile) ([]Result, error) {
+
+func (l *Library) navigate(r Request, files []sourceFile, paging *pageState) ([]Result, error) {
 	var results []Result
 	scope, e := cleanDoc(r.Doc)
 	if e != nil {
@@ -535,33 +595,15 @@ func (l *Library) navigate(r Request, files []sourceFile) ([]Result, error) {
 		}
 		results = append(results, result)
 	}
-	return budgetResults(pageResults(results, r), r.MaxChars), nil
+	return paginateResults(results, r, paging), nil
 }
-func budgetResults(results []Result, max int) []Result {
-	used := 0
-	out := make([]Result, 0, len(results))
-	for _, r := range results {
-		if used >= max {
-			break
-		}
-		if len([]rune(r.Text)) > max-used {
-			r.Text = truncate(r.Text, max-used)
-			r.Truncated = true
-		}
-		used += len([]rune(r.Text))
-		out = append(out, r)
-	}
-	return out
-}
-func (l *Library) grep(ctx context.Context, r Request, files []sourceFile, info *CacheInfo) ([]Result, []frequencyEntry, []string, error) {
+func (l *Library) grep(ctx context.Context, r Request, files []sourceFile, info *CacheInfo, paging *pageState) ([]Result, []frequencyEntry, []string, error) {
 	matcher, e := newMatcher(r)
 	if e != nil {
 		return nil, nil, nil, e
 	}
-	var results []Result
-	var records []frequencyEntry
+	p := pageCollector{r: r, state: paging}
 	var warnings []string
-	matched, used := 0, 0
 	for _, f := range files {
 		if knownBinary(f.doc) || strings.EqualFold(filepath.Ext(f.doc), ".pdf") {
 			continue
@@ -581,21 +623,14 @@ func (l *Library) grep(ctx context.Context, r Request, files []sourceFile, info 
 			if matcher.score(line) == 0 {
 				continue
 			}
-			matched++
-			if matched <= r.Offset {
-				continue
+			text := truncate(line, r.SnippetChars)
+			result := Result{Source: f.source.ID, Doc: f.doc, Kind: "source", StartLine: n + 1, EndLine: n + 1, Text: text, EntryID: entryID(f.source.ID, f.doc, 0, n+1, n+1), Truncated: len([]rune(text)) < len([]rune(line))}
+			if !p.add(candidate{result: result, records: []frequencyEntry{{Result: result, Digest: d.digest}}}) {
+				return p.results, p.records, warnings, nil
 			}
-			if len(results) >= r.Limit || used >= r.MaxChars {
-				continue
-			}
-			text := truncate(line, minInt(r.SnippetChars, r.MaxChars-used))
-			used += len([]rune(text))
-			result := Result{Source: f.source.ID, Doc: f.doc, Kind: "source", StartLine: n + 1, EndLine: n + 1, Text: text, EntryID: entryID(f.source.ID, f.doc, 0, n+1, n+1)}
-			results = append(results, result)
-			records = append(records, frequencyEntry{Result: result, Digest: d.digest})
 		}
 	}
-	return results, records, warnings, nil
+	return p.results, p.records, warnings, nil
 }
 func splitPageRef(name string) (string, int, error) {
 	at := strings.LastIndex(name, "#page=")
@@ -639,7 +674,7 @@ func (l *Library) locate(sources []Source, name string) (sourceFile, error) {
 	}
 	return sourceFile{}, fmt.Errorf("document not found or excluded by configured source policy: %s", doc)
 }
-func (l *Library) readOrView(ctx context.Context, r Request, sources []Source, info *CacheInfo) ([]Result, []Image, []frequencyEntry, []string, error) {
+func (l *Library) readOrView(ctx context.Context, r Request, sources []Source, info *CacheInfo, paging *pageState) ([]Result, []Image, []frequencyEntry, []string, error) {
 	name := r.Doc
 	if name == "" {
 		name = r.Query
@@ -738,6 +773,7 @@ func (l *Library) readOrView(ctx context.Context, r Request, sources []Source, i
 			used := 0
 			for i := start; i <= end; i++ {
 				if used >= r.MaxChars {
+					paging.budgetStopped = true
 					break
 				}
 				b := pg.Blocks[i-1]

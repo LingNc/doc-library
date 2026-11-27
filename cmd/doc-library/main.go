@@ -43,6 +43,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	var configPath, cacheDir, requestPath, mode, query, doc, match, region, outDir string
 	var requestStdin, jsonl, regex, caseSensitive, version bool
+	var outputVersion int
+	var includeBBox bool
 	var roots rootList
 	var sources, kinds, extensions stringList
 	var limit, offset, snippet, maxChars, lineChars, startLine, endLine, page, dpi, zoom int
@@ -90,6 +92,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fs.StringVar(&requestPath, "request", "", "read one JSON request from file")
 	fs.BoolVar(&jsonl, "jsonl", false, "read one JSON request per stdin line")
 	fs.BoolVar(&version, "version", false, "print version as JSON")
+	fs.IntVar(&outputVersion, "output-version", 0, "response format version: 1 (legacy) or 2 (compact)")
+	fs.BoolVar(&includeBBox, "include-bbox", false, "include PDF bbox_pct fields (v2; does not enable PDF extraction)")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -97,6 +101,15 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		writeError(stdout, err, "")
 		return 2
 	}
+	var outputVersionSet, includeBBoxSet bool
+	fs.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "output-version":
+			outputVersionSet = true
+		case "include-bbox":
+			includeBBoxSet = true
+		}
+	})
 	if version {
 		return writeJSON(stdout, map[string]any{"version": doclibrary.Version, "ok": true})
 	}
@@ -153,6 +166,10 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		configDir = filepath.Dir(abs)
 		resolveConfigPaths(&cfg, configDir)
+	}
+	cfg = applyOutputOptions(cfg, outputVersion, outputVersionSet, includeBBox, includeBBoxSet)
+	if outputVersionSet && outputVersion == 0 {
+		return fail(stdout, errors.New("--output-version must be 1 or 2"))
 	}
 	for i, item := range roots {
 		id, path, hasID := strings.Cut(item, "=")
@@ -244,6 +261,16 @@ type rootList []string
 
 func (s *rootList) String() string     { return strings.Join(*s, ",") }
 func (s *rootList) Set(v string) error { *s = append(*s, v); return nil }
+
+func applyOutputOptions(cfg doclibrary.Config, outputVersion int, outputVersionSet bool, includeBBox bool, includeBBoxSet bool) doclibrary.Config {
+	if outputVersionSet {
+		cfg.Output.Version = outputVersion
+	}
+	if includeBBoxSet {
+		cfg.Output.IncludeBBox = &includeBBox
+	}
+	return cfg
+}
 
 func buildRequest(mode, query string, sources, kinds, extensions []string, doc string, limit, offset, snippet, maxChars, lineChars int, match string, regex, caseSensitive, recursive, includeImage, inlineImages, passive bool, entryID string, startLine, endLine, page, dpi, zoom int, outDir string) doclibrary.Request {
 	return doclibrary.Request{Mode: mode, Query: query, Sources: append([]string(nil), sources...), Kinds: append([]string(nil), kinds...), Extensions: append([]string(nil), extensions...), Doc: doc, Limit: limit, Offset: offset, SnippetChars: snippet, MaxChars: maxChars, LineChars: lineChars, Match: match, Regex: regex, CaseSensitive: caseSensitive, Recursive: recursive, IncludeImage: includeImage, InlineImages: inlineImages, Passive: passive, EntryID: entryID, StartLine: startLine, EndLine: endLine, Page: page, DPI: dpi, Zoom: zoom, OutDir: outDir}
