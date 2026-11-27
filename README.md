@@ -57,6 +57,7 @@ Go 包导入路径为 `doc-library/pkg/doclibrary`，包名 `doclibrary`。当�
 - [开发说明](docs/development.md)：构建、回归和目录维护。
 - [验证记录](docs/validation.md)：真实 YanTrace、exam-zh、LuaDraw 文档及缓存验证。
 - [缓存性能研究](docs/cache-design.md)：文件与 SQLite 双后端、FUSE/NFS 约束及后续优化建议（设计草案，尚未实现）。
+- [检索输出设计](docs/output-design.md)：默认简洁正文、保留页/行出处及可选bbox的设计提案（尚未实现，当前参数仍见调用契约）。
 - [复用来源](docs/provenance.md)：抽取基线、许可证和独立边界。
 
 普通文本操作无需 PDF 工具；PDF 文本依赖 Poppler 的 `pdftotext`，显式看图另需 `pdftoppm`。不做 OCR，不执行文档中的 TeX/Lua 代码；PDF 页码/区域定位不代表精确反查源代码行。内容寻址缓存目前没有自动垃圾回收，旧提取数据可能继续占用磁盘。
